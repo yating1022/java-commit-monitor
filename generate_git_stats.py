@@ -45,25 +45,53 @@ def process_data(df):
     return df
 
 def generate_visuals(df):
+    # 1. 每日提交趋势
     daily_counts = df.groupby('day_str').size().reset_index(name='count')
-    heatmap_data = df.groupby(['weekday', 'hour']).size().reset_index(name='count')
+    
+    # 2. 活跃时间热力图 (修复 Pandas 警告: observed=False)
+    heatmap_data = df.groupby(['weekday', 'hour'], observed=False).size().reset_index(name='count')
+    
+    # 3. 作者贡献分布
     author_counts = df['author'].value_counts().reset_index().head(10)
     author_counts.columns = ['author', 'count']
 
+    # === 创建画布 (修复 Pie Chart 类型错误) ===
     fig = make_subplots(
         rows=3, cols=2,
         column_widths=[0.7, 0.3],
         row_heights=[0.5, 0.25, 0.25],
-        specs=[[{"colspan": 2}, None], [{"rowspan": 2}, {}], [None, {}]],
+        specs=[
+            [{"colspan": 2}, None],                  # 第一行：xy 类型 (默认)
+            [{"rowspan": 2}, {"type": "domain"}],    # 第二行：左边热力图(xy)，右边饼图(必须指定 type='domain')
+            [None, {}]                               # 第三行：左边被占用，右边预留
+        ],
         subplot_titles=("📈 Commit 趋势 (UTC时间)", "🔥 活跃热力图", "🏆 贡献者 Top 10", "")
     )
 
-    fig.add_trace(go.Scatter(x=daily_counts['day_str'], y=daily_counts['count'], mode='lines', fill='tozeroy', name='提交数', line=dict(color='#00d2ff')), row=1, col=1)
-    fig.add_trace(go.Heatmap(x=heatmap_data['hour'], y=heatmap_data['weekday'], z=heatmap_data['count'], colorscale='Viridis', name='活跃度'), row=2, col=1)
-    fig.add_trace(go.Pie(labels=author_counts['author'], values=author_counts['count'], hole=.4, marker=dict(colors=px.colors.qualitative.Pastel)), row=2, col=2)
+    # 图表 1: 趋势图
+    fig.add_trace(
+        go.Scatter(x=daily_counts['day_str'], y=daily_counts['count'], mode='lines', fill='tozeroy', name='提交数', line=dict(color='#00d2ff')), 
+        row=1, col=1
+    )
+
+    # 图表 2: 热力图
+    fig.add_trace(
+        go.Heatmap(x=heatmap_data['hour'], y=heatmap_data['weekday'], z=heatmap_data['count'], colorscale='Viridis', name='活跃度'), 
+        row=2, col=1
+    )
+
+    # 图表 3: 饼图
+    fig.add_trace(
+        go.Pie(labels=author_counts['author'], values=author_counts['count'], hole=.4, marker=dict(colors=px.colors.qualitative.Pastel)), 
+        row=2, col=2
+    )
 
     fig.update_layout(title_text=f"Git 分析报告: {REPO_URL.split('/')[-1]}", template="plotly_dark", height=900)
     fig.update_xaxes(rangeslider_visible=True, row=1, col=1)
+    
+    # 调整热力图 X 轴
+    fig.update_xaxes(title_text="小时 (0-23)", tickmode='linear', dtick=2, row=2, col=1)
+
     return fig
 
 def main():
@@ -72,11 +100,11 @@ def main():
         os.makedirs(OUTPUT_DIR)
 
     df = fetch_commit_data(REPO_URL)
-    if not df.empty:
-        df = process_data(df)
-        fig = generate_visuals(df)
-        fig.write_html(OUTPUT_FILE)
-        print(f"🎉 成功生成: {OUTPUT_FILE}")
+    
+    if df is None or df.empty:
+        print("⚠️ 警告：没有抓取到数据，跳过生成。")
+        return
 
-if __name__ == "__main__":
-    main()
+    df = process_data(df)
+    fig = generate_visuals(df)
+    fig.write_html(OUTPUT_
