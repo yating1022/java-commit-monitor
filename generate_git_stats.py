@@ -13,6 +13,20 @@ JSON_FILE = os.path.join(OUTPUT_DIR, "data.json")
 TEMPLATE_FILE = "index.html"
 # =======================================
 
+def get_commit_lines(commit):
+    """获取提交的代码行数变化"""
+    if commit.parents:
+        parent = commit.parents[0]
+        diffs = parent.diff(commit)
+        insertions = 0
+        deletions = 0
+        for d in diffs:
+            if d.b_blob:
+                insertions += d.insertions
+                deletions += d.deletions
+        return insertions - deletions  # 净增行数
+    return 0  # 初始提交
+
 def fetch_commit_data(repo_url):
     temp_dir = tempfile.mkdtemp()
     print(f"🚀 正在克隆仓库 {repo_url}...")
@@ -21,11 +35,13 @@ def fetch_commit_data(repo_url):
         commits_list = []
         # 只要最近的 5000 条，防止数据量过大卡顿
         for commit in repo.iter_commits(max_count=5000):
+            lines_changed = get_commit_lines(commit)
             commits_list.append({
-                'hash': commit.hexsha[:7], # 短 hash
+                'hash': commit.hexsha[:7],  # 短 hash
                 'date': datetime.fromtimestamp(commit.committed_date),
                 'message': commit.message.strip(),
-                'timestamp': commit.committed_date
+                'timestamp': commit.committed_date,
+                'lines': max(0, lines_changed)  # 确保不是负数
             })
         return pd.DataFrame(commits_list)
     finally:
@@ -39,7 +55,7 @@ def calculate_streak(dates):
     """计算当前连续提交天数"""
     if not dates:
         return 0
-    dates = sorted(list(set(dates)), reverse=True) # 从大到小排
+    dates = sorted(list(set(dates)), reverse=True)  # 从大到小排
     current_streak = 0
     today = datetime.now().date()
     
@@ -59,13 +75,14 @@ def process_to_json(df):
     df['date_dt'] = pd.to_datetime(df['date'])
     df['day_str'] = df['date_dt'].dt.date
     df['hour'] = df['date_dt'].dt.hour
-    df['weekday'] = df['date_dt'].dt.weekday # 0=Mon, 6=Sun
+    df['weekday'] = df['date_dt'].dt.weekday  # 0=Mon, 6=Sun
     
     # 1. 基础统计
     total_commits = len(df)
-    last_update = df['date_dt'].max().strftime("%Y-%m-%d %H:%M")
+    last_update = df['date_dt'].max().strftime("%Y-%m-%d %H:%M:%S")
     unique_days = df['day_str'].unique().tolist()
     current_streak = calculate_streak(unique_days)
+    total_lines = df['lines'].sum()  # 新增：总代码行数
     
     # 2. 趋势图 (按天)
     daily_counts = df.groupby('day_str').size().reset_index(name='count')
@@ -79,14 +96,15 @@ def process_to_json(df):
         heatmap_data.append([int(row['hour']), int(row['weekday']), int(row['count'])])
 
     # 4. 最近提交记录 (取前 10 条)
-    recent_commits = df.head(10)[['hash', 'message', 'date']].astype(str).to_dict(orient='records')
+    recent_commits = df.head(10)[['hash', 'message', 'date', 'lines']].astype(str).to_dict(orient='records')
 
     data = {
         "meta": {
             "repo": REPO_URL.split('/')[-1],
             "updated": last_update,
             "total": total_commits,
-            "streak": current_streak
+            "streak": current_streak,
+            "total_lines": total_lines  # 新增：总代码行数
         },
         "trend": {
             "dates": daily_counts['day_str'].astype(str).tolist(),
@@ -101,8 +119,10 @@ def main():
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
     
-    if os.path.exists(TEMPLATE_FILE):
-        shutil.copy(TEMPLATE_FILE, os.path.join(OUTPUT_DIR, "index.html"))
+    # 复制模板文件
+    for file in ['index.html', 'style.css', 'script.js']:
+        if os.path.exists(file):
+            shutil.copy(file, os.path.join(OUTPUT_DIR, file))
     
     df = fetch_commit_data(REPO_URL)
     if df is not None and not df.empty:
