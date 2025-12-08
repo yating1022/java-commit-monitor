@@ -48,7 +48,7 @@ function initDashboard(data) {
     const meta = data.meta || {};
     
     const repoNameEl = document.getElementById('repo-name');
-    if (repoNameEl) repoNameEl.innerText = `${meta.repo || '未知仓库'} 学习进度`;
+    if (repoNameEl) repoNameEl.innerText = `刘顺杰的JAVA学习情况`;
     
     document.getElementById('total-commits').innerText = meta.total || 0;
     document.getElementById('current-streak').innerText = meta.streak || 0;
