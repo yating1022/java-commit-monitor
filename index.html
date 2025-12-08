@@ -3,271 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Code Pulse</title>
+    <title>学习进度监控</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --text-main: #f1f5f9;
-            --text-sub: #94a3b8;
-            --accent: #38bdf8;
-            --accent-grad: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 20px;
-            /* 背景光晕效果 */
-            background-image: radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.1) 0%, transparent 40%),
-                              radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 40%);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-
-        /* 头部 */
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-        h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.5px; }
-        .status-badge {
-            font-size: 0.8rem;
-            background: rgba(16, 185, 129, 0.2);
-            color: #34d399;
-            padding: 4px 12px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .status-dot { width: 8px; height: 8px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; }
-
-        /* 卡片网格 */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-
-        /* 统计卡片样式 */
-        .stat-card { display: flex; flex-direction: column; justify-content: center; }
-        .stat-icon { font-size: 1.5rem; margin-bottom: 10px; background: var(--accent-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .stat-value { font-size: 1.8rem; font-weight: 700; }
-        .stat-label { font-size: 0.85rem; color: var(--text-sub); margin-top: 4px; }
-
-        /* 图表容器 */
-        .chart-container { height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
-        .full-width { grid-column: 1 / -1; }
-        .chart-title { font-size: 1rem; margin-bottom: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        
-        /* 最近动态列表 */
-        .commit-list { list-style: none; padding: 0; margin: 0; }
-        .commit-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .commit-item:last-child { border-bottom: none; }
-        .commit-hash { font-family: monospace; color: var(--accent); background: rgba(56, 189, 248, 0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; height: fit-content;}
-        .commit-info { flex: 1; }
-        .commit-msg { font-size: 0.9rem; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .commit-date { font-size: 0.75rem; color: var(--text-sub); }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
-        /* 移动端适配 */
-        @media (max-width: 768px) {
-            .grid { grid-template-columns: 1fr; } /* 手机上卡片变单列 */
-            h1 { font-size: 1.25rem; }
-            .stat-value { font-size: 1.5rem; }
-            .card { padding: 16px; }
-            .chart-container { height: 250px; }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1 id="repo-name">Loading...</h1>
-        <div class="status-badge"><div class="status-dot"></div>Online</div>
+        <h1 id="repo-name">加载中...</h1>
+        <div class="status-badge"><div class="status-dot"></div>数据已更新</div>
     </header>
 
     <div class="grid">
         <div class="card stat-card">
             <i class="fa-solid fa-code-commit stat-icon"></i>
             <div class="stat-value" id="total-commits">-</div>
-            <div class="stat-label">Total Commits</div>
+            <div class="stat-label">总学习次数</div>
         </div>
         <div class="card stat-card">
             <i class="fa-solid fa-fire stat-icon"></i>
             <div class="stat-value" id="current-streak">-</div>
-            <div class="stat-label">Current Streak (Days)</div>
+            <div class="stat-label">当前连续学习(天)</div>
         </div>
         <div class="card stat-card">
-            <i class="fa-regular fa-clock stat-icon"></i>
-            <div class="stat-value" id="last-update-time" style="font-size: 1.2rem; line-height: 1.8rem;">-</div>
-            <div class="stat-label">Last Updated (UTC)</div>
+            <i class="fa-solid fa-clock stat-icon"></i>
+            <div class="stat-value" id="last-study-time" style="font-size: 1.2rem; line-height: 1.8rem;">-</div>
+            <div class="stat-label">上次学习时间</div>
+        </div>
+        <div class="card stat-card">
+            <i class="fa-solid fa-file-code stat-icon"></i>
+            <div class="stat-value" id="total-lines">-</div>
+            <div class="stat-label">累计代码行数</div>
         </div>
     </div>
 
     <div class="grid">
         <div class="card full-width">
-            <div class="chart-title"><i class="fa-solid fa-chart-line"></i> 提交趋势</div>
-            <div id="trendChart" class="chart-container"></div>
+            <div class="chart-title"><i class="fa-solid fa-chart-line"></i> 学习频率趋势</div>
+            <div id="trendChart" class="chart-container">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="grid">
         <div class="card full-width">
-            <div class="chart-title"><i class="fa-solid fa-braille"></i> 活跃时段分布</div>
-            <div id="heatmapChart" class="chart-container" style="height: 220px;"></div>
+            <div class="chart-title"><i class="fa-solid fa-calendar-alt"></i> 学习时段分布</div>
+            <div id="heatmapChart" class="chart-container" style="height: 220px;">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
         </div>
         
         <div class="card full-width">
-            <div class="chart-title"><i class="fa-solid fa-list-ul"></i> 最近动态</div>
+            <div class="chart-title"><i class="fa-solid fa-list-ul"></i> 最近学习内容</div>
             <ul class="commit-list" id="commit-list">
-                </ul>
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </ul>
         </div>
     </div>
 </div>
 
-<script>
-    fetch('data.json')
-        .then(response => response.json())
-        .then(data => {
-            initDashboard(data);
-        })
-        .catch(err => {
-            console.error(err);
-            document.getElementById('repo-name').innerText = "Load Failed";
-        });
-
-    function initDashboard(data) {
-        // 1. 填充基础文本
-        document.getElementById('repo-name').innerText = data.meta.repo;
-        document.getElementById('total-commits').innerText = data.meta.total;
-        document.getElementById('current-streak').innerText = data.meta.streak;
-        document.getElementById('last-update-time').innerText = data.meta.updated.split(' ')[0]; // 只显示日期
-
-        // 2. 渲染最近提交列表
-        const listEl = document.getElementById('commit-list');
-        data.recent.forEach(commit => {
-            const li = document.createElement('li');
-            li.className = 'commit-item';
-            li.innerHTML = `
-                <div class="commit-hash">${commit.hash}</div>
-                <div class="commit-info">
-                    <div class="commit-msg">${commit.message}</div>
-                    <div class="commit-date">${commit.date}</div>
-                </div>
-            `;
-            listEl.appendChild(li);
-        });
-
-        // 3. ECharts 通用配置 (深色模式)
-        const commonOption = {
-            textStyle: { fontFamily: 'Inter, sans-serif' },
-            tooltip: { 
-                trigger: 'axis', 
-                backgroundColor: 'rgba(30, 41, 59, 0.9)', 
-                borderColor: '#334155', 
-                textStyle: { color: '#f1f5f9' } 
-            },
-            grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true }
-        };
-
-        // --- 趋势图 ---
-        const trendChart = echarts.init(document.getElementById('trendChart'));
-        trendChart.setOption({
-            ...commonOption,
-            xAxis: { 
-                type: 'category', 
-                data: data.trend.dates,
-                axisLine: { lineStyle: { color: '#475569' } },
-                axisLabel: { color: '#94a3b8' }
-            },
-            yAxis: { 
-                type: 'value', 
-                splitLine: { lineStyle: { color: '#334155', type: 'dashed' } },
-                axisLabel: { color: '#94a3b8' }
-            },
-            series: [{
-                data: data.trend.values,
-                type: 'line',
-                smooth: true,
-                symbol: 'none',
-                lineStyle: { width: 3, color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{offset: 0, color: '#3b82f6'}, {offset: 1, color: '#06b6d4'}]) },
-                areaStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(6, 182, 212, 0.3)' },
-                        { offset: 1, color: 'rgba(6, 182, 212, 0.01)' }
-                    ])
-                }
-            }]
-        });
-
-        // --- 热力图 ---
-        const heatmapChart = echarts.init(document.getElementById('heatmapChart'));
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const hours = Array.from({length: 24}, (_, i) => i);
-        
-        heatmapChart.setOption({
-            tooltip: { position: 'top' },
-            grid: { height: '80%', top: '5%', bottom: '15%' },
-            xAxis: { type: 'category', data: hours, splitArea: { show: true }, axisLabel: { color: '#94a3b8' } },
-            yAxis: { type: 'category', data: days, splitArea: { show: true }, axisLabel: { color: '#94a3b8' } },
-            visualMap: {
-                min: 0,
-                max: Math.max(...data.heatmap.map(i => i[2])) || 5,
-                calculable: false,
-                orient: 'horizontal',
-                left: 'center',
-                bottom: '0%',
-                inRange: { color: ['#1e293b', '#0e7490', '#22d3ee'] }, // 深蓝 -> 亮青
-                textStyle: { color: '#94a3b8' }
-            },
-            series: [{
-                type: 'heatmap',
-                data: data.heatmap,
-                label: { show: false },
-                itemStyle: { 
-                    borderRadius: 4,
-                    borderColor: '#0f172a',
-                    borderWidth: 1
-                }
-            }]
-        });
-
-        // 响应式调整
-        window.addEventListener('resize', () => {
-            trendChart.resize();
-            heatmapChart.resize();
-        });
-    }
-</script>
+<script src="script.js"></script>
 </body>
 </html>
