@@ -1,16 +1,20 @@
 // 数据加载动画处理
 function showLoading(elementId) {
     const element = document.getElementById(elementId);
-    element.innerHTML = `
-        <div class="loading">
-            <div class="loading-spinner"></div>
-        </div>
-    `;
+    if (element) {
+        element.innerHTML = `
+            <div class="loading">
+                <div class="loading-spinner"></div>
+            </div>
+        `;
+    }
 }
 
 function hideLoading(elementId) {
     const element = document.getElementById(elementId);
-    element.innerHTML = '';
+    if (element) {
+        element.innerHTML = '';
+    }
 }
 
 // 格式化日期显示
@@ -34,7 +38,9 @@ function formatDate(dateString) {
 // 主函数
 function initDashboard(data) {
     // 1. 填充基础文本
-    document.getElementById('repo-name').innerText = `${data.meta.repo} 学习进度`;
+    const repoNameEl = document.getElementById('repo-name');
+    if (repoNameEl) repoNameEl.innerText = `${data.meta.repo} 学习进度`;
+    
     document.getElementById('total-commits').innerText = data.meta.total;
     document.getElementById('current-streak').innerText = data.meta.streak;
     document.getElementById('last-study-time').innerText = formatDate(data.meta.updated);
@@ -76,107 +82,119 @@ function initDashboard(data) {
 
     // --- 趋势图 ---
     hideLoading('trendChart');
-    const trendChart = echarts.init(document.getElementById('trendChart'));
-    
-    // 为趋势图添加渐入动画
-    trendChart.setOption({
-        ...commonOption,
-        animationDuration: 1500,
-        xAxis: { 
-            type: 'category', 
-            data: data.trend.dates,
-            axisLine: { lineStyle: { color: '#cbd5e1' } },
-            axisLabel: { 
-                color: '#64748b',
-                rotate: 30,
-                interval: 'auto'
-            }
-        },
-        yAxis: { 
-            type: 'value', 
-            name: '学习次数',
-            nameTextStyle: { color: '#64748b' },
-            splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
-            axisLabel: { color: '#64748b' }
-        },
-        series: [{
-            data: data.trend.values,
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 6,
-            itemStyle: { color: var(--accent) },
-            lineStyle: { width: 3, color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                {offset: 0, color: '#3b82f6'}, 
-                {offset: 1, color: '#60a5fa'}
-            ]) },
-            areaStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
-                    { offset: 1, color: 'rgba(59, 130, 246, 0.01)' }
-                ])
+    const trendChartDom = document.getElementById('trendChart');
+    if (trendChartDom) {
+        const trendChart = echarts.init(trendChartDom);
+        
+        // 为趋势图添加渐入动画
+        trendChart.setOption({
+            ...commonOption,
+            animationDuration: 1500,
+            xAxis: { 
+                type: 'category', 
+                data: data.trend.dates,
+                axisLine: { lineStyle: { color: '#cbd5e1' } },
+                axisLabel: { 
+                    color: '#64748b',
+                    rotate: 30,
+                    interval: 'auto'
+                }
             },
-            emphasis: {
-                scale: true,
-                itemStyle: { shadowBlur: 10, shadowColor: 'rgba(59, 130, 246, 0.5)' }
-            }
-        }]
-    });
+            yAxis: { 
+                type: 'value', 
+                name: '学习次数',
+                nameTextStyle: { color: '#64748b' },
+                splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+                axisLabel: { color: '#64748b' }
+            },
+            series: [{
+                data: data.trend.values,
+                type: 'line',
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 6,
+                // [修复点] 这里原来写的是 var(--accent)，这是 CSS 语法，JS 会报错。
+                // 已修改为具体的蓝色值 '#3b82f6'
+                itemStyle: { color: '#3b82f6' }, 
+                lineStyle: { width: 3, color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                    {offset: 0, color: '#3b82f6'}, 
+                    {offset: 1, color: '#60a5fa'}
+                ]) },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+                        { offset: 1, color: 'rgba(59, 130, 246, 0.01)' }
+                    ])
+                },
+                emphasis: {
+                    scale: true,
+                    itemStyle: { shadowBlur: 10, shadowColor: 'rgba(59, 130, 246, 0.5)' }
+                }
+            }]
+        });
+
+        // 响应式调整 (trendChart scope)
+        window.addEventListener('resize', () => {
+            trendChart.resize();
+        });
+    }
 
     // --- 热力图 ---
     hideLoading('heatmapChart');
-    const heatmapChart = echarts.init(document.getElementById('heatmapChart'));
-    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    const hours = Array.from({length: 24}, (_, i) => `${i}时`);
-    
-    heatmapChart.setOption({
-        animationDuration: 1500,
-        tooltip: { 
-            position: 'top',
-            formatter: function(params) {
-                return `${days[params.data[1]]} ${hours[params.data[0]]}<br>学习次数: ${params.data[2]}`;
-            }
-        },
-        grid: { height: '80%', top: '5%', bottom: '15%' },
-        xAxis: { 
-            type: 'category', 
-            data: hours, 
-            splitArea: { show: true, areaStyle: { color: ['#f8fafc', '#f1f5f9'] } },
-            axisLabel: { color: '#64748b', interval: 1 }
-        },
-        yAxis: { 
-            type: 'category', 
-            data: days, 
-            splitArea: { show: true, areaStyle: { color: ['#f8fafc', '#f1f5f9'] } },
-            axisLabel: { color: '#64748b' }
-        },
-        visualMap: {
-            min: 0,
-            max: Math.max(...data.heatmap.map(i => i[2])) || 5,
-            calculable: false,
-            orient: 'horizontal',
-            left: 'center',
-            bottom: '0%',
-            inRange: { color: ['#eff6ff', '#dbeafe', '#bfdbfe', '#93c5fd'] },
-            textStyle: { color: '#64748b' }
-        },
-        series: [{
-            type: 'heatmap',
-            data: data.heatmap,
-            label: { show: false },
-            itemStyle: { 
-                borderRadius: 4,
-                borderColor: '#f8fafc',
-                borderWidth: 1
-            }
-        }]
-    });
+    const heatmapChartDom = document.getElementById('heatmapChart');
+    if (heatmapChartDom) {
+        const heatmapChart = echarts.init(heatmapChartDom);
+        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        const hours = Array.from({length: 24}, (_, i) => `${i}时`);
+        
+        heatmapChart.setOption({
+            animationDuration: 1500,
+            tooltip: { 
+                position: 'top',
+                formatter: function(params) {
+                    return `${days[params.data[1]]} ${hours[params.data[0]]}<br>学习次数: ${params.data[2]}`;
+                }
+            },
+            grid: { height: '80%', top: '5%', bottom: '15%' },
+            xAxis: { 
+                type: 'category', 
+                data: hours, 
+                splitArea: { show: true, areaStyle: { color: ['#f8fafc', '#f1f5f9'] } },
+                axisLabel: { color: '#64748b', interval: 1 }
+            },
+            yAxis: { 
+                type: 'category', 
+                data: days, 
+                splitArea: { show: true, areaStyle: { color: ['#f8fafc', '#f1f5f9'] } },
+                axisLabel: { color: '#64748b' }
+            },
+            visualMap: {
+                min: 0,
+                max: Math.max(...data.heatmap.map(i => i[2])) || 5,
+                calculable: false,
+                orient: 'horizontal',
+                left: 'center',
+                bottom: '0%',
+                inRange: { color: ['#eff6ff', '#dbeafe', '#bfdbfe', '#93c5fd'] },
+                textStyle: { color: '#64748b' }
+            },
+            series: [{
+                type: 'heatmap',
+                data: data.heatmap,
+                label: { show: false },
+                itemStyle: { 
+                    borderRadius: 4,
+                    borderColor: '#f8fafc',
+                    borderWidth: 1
+                }
+            }]
+        });
 
-    // 响应式调整
-    window.addEventListener('resize', () => {
-        trendChart.resize();
-        heatmapChart.resize();
-    });
+         // 响应式调整 (heatmapChart scope)
+         window.addEventListener('resize', () => {
+            heatmapChart.resize();
+        });
+    }
 
     // 初始加载时触发一次 resize 确保图表正确显示
     setTimeout(() => {
@@ -185,9 +203,10 @@ function initDashboard(data) {
 }
 
 // 加载数据
-showLoading('commit-list');
-showLoading('trendChart');
-showLoading('heatmapChart');
+// 确保 DOM 元素存在再调用 showLoading，防止报错
+if(document.getElementById('commit-list')) showLoading('commit-list');
+if(document.getElementById('trendChart')) showLoading('trendChart');
+if(document.getElementById('heatmapChart')) showLoading('heatmapChart');
 
 fetch('data.json')
     .then(response => {
@@ -199,7 +218,8 @@ fetch('data.json')
     })
     .catch(err => {
         console.error(err);
-        document.getElementById('repo-name').innerText = "数据加载失败";
+        const repoName = document.getElementById('repo-name');
+        if(repoName) repoName.innerText = "数据加载失败";
         
         // 隐藏所有加载动画
         hideLoading('commit-list');
@@ -207,11 +227,13 @@ fetch('data.json')
         hideLoading('heatmapChart');
         
         // 显示错误信息
-        const errorMsg = document.createElement('div');
-        errorMsg.style.textAlign = 'center';
-        errorMsg.style.padding = '20px';
-        errorMsg.style.color = '#dc2626';
-        errorMsg.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i> 无法加载学习数据，请稍后重试';
-        
-        document.getElementById('commit-list').appendChild(errorMsg);
+        const listEl = document.getElementById('commit-list');
+        if (listEl) {
+            const errorMsg = document.createElement('div');
+            errorMsg.style.textAlign = 'center';
+            errorMsg.style.padding = '20px';
+            errorMsg.style.color = '#dc2626';
+            errorMsg.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i> 无法加载学习数据，请稍后重试';
+            listEl.appendChild(errorMsg);
+        }
     });
