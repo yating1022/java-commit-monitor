@@ -13,51 +13,38 @@ JSON_FILE = os.path.join(OUTPUT_DIR, "data.json")
 TEMPLATE_FILE = "index.html"
 # =======================================
 
-def get_commit_lines(commit):
-    """获取单次提交的增删行数"""
-    additions = 0
-    deletions = 0
-    # 比较当前提交与上一次提交的差异
-    if commit.parents:
-        for d in commit.diff(commit.parents[0]):
-            additions += d.additions  # 正确属性名：additions（插入行数）
-            deletions += d.deletions   # 正确属性名：deletions（删除行数）
-    return additions, deletions
-
 def fetch_commit_data(repo_url):
     temp_dir = tempfile.mkdtemp()
     print(f"🚀 正在克隆仓库 {repo_url}...")
     try:
         repo = git.Repo.clone_from(repo_url, temp_dir)
         commits_list = []
-        # 只要最近的 5000 条，防止数据量过大卡顿
+        # 只获取最近的 5000 条提交，防止数据量过大
         for commit in repo.iter_commits(max_count=5000):
-            additions, deletions = get_commit_lines(commit)
             commits_list.append({
-                'hash': commit.hexsha[:7],  # 短 hash
+                'hash': commit.hexsha[:7],  # 短哈希
                 'date': datetime.fromtimestamp(commit.committed_date),
                 'message': commit.message.strip(),
-                'timestamp': commit.committed_date,
-                'additions': additions,     # 新增：插入行数
-                'deletions': deletions      # 新增：删除行数
+                'timestamp': commit.committed_date
             })
         return pd.DataFrame(commits_list)
     finally:
         try:
             repo.close()
-            shutil.rmtree(temp_dir)
-        except Exception:
-            pass
+            shutil.rmtree(temp_dir)  # 清理临时目录
+        except Exception as e:
+            print(f"清理临时文件时出错: {e}")
 
 def calculate_streak(dates):
     """计算当前连续提交天数"""
     if not dates:
         return 0
-    dates = sorted(list(set(dates)), reverse=True)  # 从大到小排
+    # 去重并按日期倒序排列（最新的在前）
+    dates = sorted(list(set(dates)), reverse=True)
     current_streak = 0
     today = datetime.now().date()
     
-    # 如果最新的提交不是今天或昨天，说明断了
+    # 如果最新的提交距离今天超过1天，说明连续提交已中断
     if dates[0] < today - timedelta(days=1):
         return 0
         
@@ -71,30 +58,31 @@ def calculate_streak(dates):
 
 def process_to_json(df):
     df['date_dt'] = pd.to_datetime(df['date'])
-    df['day_str'] = df['date_dt'].dt.date
-    df['hour'] = df['date_dt'].dt.hour
-    df['weekday'] = df['date_dt'].dt.weekday  # 0=Mon, 6=Sun
+    df['day_str'] = df['date_dt'].dt.date  # 提取日期（不含时间）
+    df['hour'] = df['date_dt'].dt.hour     # 提取小时
+    df['weekday'] = df['date_dt'].dt.weekday  # 提取星期（0=周一，6=周日）
     
-    # 1. 基础统计
+    # 1. 基础统计信息
     total_commits = len(df)
     last_update = df['date_dt'].max().strftime("%Y-%m-%d %H:%M")
     unique_days = df['day_str'].unique().tolist()
     current_streak = calculate_streak(unique_days)
     
-    # 2. 趋势图 (按天)
+    # 2. 提交趋势图数据（按天统计）
     daily_counts = df.groupby('day_str').size().reset_index(name='count')
     daily_counts = daily_counts.sort_values('day_str')
     
-    # 3. 活跃时间分布 (周 x 小时) - 用于热力图
+    # 3. 活跃时间分布（用于热力图：星期 x 小时）
     heatmap_data = []
     grouped = df.groupby(['weekday', 'hour']).size().reset_index(name='count')
     for _, row in grouped.iterrows():
-        # ECharts heatmap 格式: [x, y, value] -> [hour, weekday, count]
+        # ECharts 热力图格式：[小时, 星期, 提交次数]
         heatmap_data.append([int(row['hour']), int(row['weekday']), int(row['count'])])
 
-    # 4. 最近提交记录 (取前 10 条)
-    recent_commits = df.head(10)[['hash', 'message', 'date', 'additions', 'deletions']].astype(str).to_dict(orient='records')
+    # 4. 最近提交记录（取前10条）
+    recent_commits = df.head(10)[['hash', 'message', 'date']].astype(str).to_dict(orient='records')
 
+    # 整理最终JSON数据
     data = {
         "meta": {
             "repo": REPO_URL.split('/')[-1],
@@ -112,12 +100,15 @@ def process_to_json(df):
     return data
 
 def main():
+    # 创建输出目录（如果不存在）
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
     
+    # 复制模板文件到输出目录
     if os.path.exists(TEMPLATE_FILE):
         shutil.copy(TEMPLATE_FILE, os.path.join(OUTPUT_DIR, "index.html"))
     
+    # 获取提交数据并生成JSON
     df = fetch_commit_data(REPO_URL)
     if df is not None and not df.empty:
         json_data = process_to_json(df)
@@ -125,7 +116,7 @@ def main():
             json.dump(json_data, f, ensure_ascii=False)
         print(f"🎉 数据已生成: {JSON_FILE}")
     else:
-        print("❌ 无数据")
+        print("❌ 未获取到提交数据")
 
 if __name__ == "__main__":
     main()
