@@ -1,17 +1,16 @@
 import os
 import shutil
 import tempfile
+import json
 from datetime import datetime
 import pandas as pd
 import git
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import plotly.express as px
 
 # =================配置区域=================
 REPO_URL = "https://github.com/mdlldz/java.git"
-OUTPUT_DIR = "public"  # 输出目录
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "index.html") # 命名为 index.html 以便默认访问
+OUTPUT_DIR = "public"
+JSON_FILE = os.path.join(OUTPUT_DIR, "data.json")
+TEMPLATE_FILE = "index.html" # 根目录下的静态模板
 # =========================================
 
 def fetch_commit_data(repo_url):
@@ -22,10 +21,8 @@ def fetch_commit_data(repo_url):
         commits_list = []
         for commit in repo.iter_commits():
             commits_list.append({
-                'hash': commit.hexsha,
                 'author': commit.author.name,
                 'date': datetime.fromtimestamp(commit.committed_date),
-                'message': commit.message.strip()
             })
         return pd.DataFrame(commits_list)
     finally:
@@ -35,76 +32,71 @@ def fetch_commit_data(repo_url):
         except Exception:
             pass
 
-def process_data(df):
+def process_to_json(df):
+    """将 DataFrame 处理为纯 JSON 结构"""
     df['date'] = pd.to_datetime(df['date'])
-    df['day_str'] = df['date'].dt.date
+    df['day_str'] = df['date'].dt.date.astype(str) # 转字符串以便JSON序列化
     df['hour'] = df['date'].dt.hour
     df['weekday'] = df['date'].dt.day_name()
-    week_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    df['weekday'] = pd.Categorical(df['weekday'], categories=week_order, ordered=True)
-    return df
-
-def generate_visuals(df):
-    # 1. 每日提交趋势
+    
+    # 1. 趋势数据
     daily_counts = df.groupby('day_str').size().reset_index(name='count')
+    daily_counts = daily_counts.sort_values('day_str') # 确保时间顺序
     
-    # 2. 活跃时间热力图 (修复 Pandas 警告: observed=False)
+    # 2. 热力图数据
+    week_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     heatmap_data = df.groupby(['weekday', 'hour'], observed=False).size().reset_index(name='count')
+    # 为了方便前端 Plotly 处理，我们这里需要构造矩阵，或者直接给 xyz 列表
+    # 这里我们直接给 xyz 列表，让前端处理
     
-    # 3. 作者贡献分布
+    # 3. 作者数据
     author_counts = df['author'].value_counts().reset_index().head(10)
     author_counts.columns = ['author', 'count']
 
-    # === 创建画布 (修复 Pie Chart 类型错误) ===
-    fig = make_subplots(
-        rows=3, cols=2,
-        column_widths=[0.7, 0.3],
-        row_heights=[0.5, 0.25, 0.25],
-        specs=[
-            [{"colspan": 2}, None],                  # 第一行：xy 类型 (默认)
-            [{"rowspan": 2}, {"type": "domain"}],    # 第二行：左边热力图(xy)，右边饼图(必须指定 type='domain')
-            [None, {}]                               # 第三行：左边被占用，右边预留
-        ],
-        subplot_titles=("📈 Commit 趋势 (UTC时间)", "🔥 活跃热力图", "🏆 贡献者 Top 10", "")
-    )
-
-    # 图表 1: 趋势图
-    fig.add_trace(
-        go.Scatter(x=daily_counts['day_str'], y=daily_counts['count'], mode='lines', fill='tozeroy', name='提交数', line=dict(color='#00d2ff')), 
-        row=1, col=1
-    )
-
-    # 图表 2: 热力图
-    fig.add_trace(
-        go.Heatmap(x=heatmap_data['hour'], y=heatmap_data['weekday'], z=heatmap_data['count'], colorscale='Viridis', name='活跃度'), 
-        row=2, col=1
-    )
-
-    # 图表 3: 饼图
-    fig.add_trace(
-        go.Pie(labels=author_counts['author'], values=author_counts['count'], hole=.4, marker=dict(colors=px.colors.qualitative.Pastel)), 
-        row=2, col=2
-    )
-
-    fig.update_layout(title_text=f"Git 分析报告: {REPO_URL.split('/')[-1]}", template="plotly_dark", height=900)
-    fig.update_xaxes(rangeslider_visible=True, row=1, col=1)
-    
-    # 调整热力图 X 轴
-    fig.update_xaxes(title_text="小时 (0-23)", tickmode='linear', dtick=2, row=2, col=1)
-
-    return fig
+    # 构造最终 JSON 字典
+    data = {
+        "repo_name": REPO_URL.split('/')[-1],
+        "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "trend": {
+            "dates": daily_counts['day_str'].tolist(),
+            "counts": daily_counts['count'].tolist()
+        },
+        "heatmap": {
+            "weekdays": heatmap_data['weekday'].tolist(),
+            "hours": heatmap_data['hour'].tolist(),
+            "counts": heatmap_data['count'].tolist()
+        },
+        "authors": {
+            "names": author_counts['author'].tolist(),
+            "counts": author_counts['count'].tolist()
+        }
+    }
+    return data
 
 def main():
-    # 确保输出目录存在
+    # 1. 准备输出目录
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
-
-    df = fetch_commit_data(REPO_URL)
     
-    if df is None or df.empty:
-        print("⚠️ 警告：没有抓取到数据，跳过生成。")
-        return
+    # 2. 复制静态 HTML 模板到 public 目录
+    if os.path.exists(TEMPLATE_FILE):
+        shutil.copy(TEMPLATE_FILE, os.path.join(OUTPUT_DIR, "index.html"))
+        print("✅ 已将模板 index.html 复制到 public 目录")
+    else:
+        print("⚠️ 警告：根目录下没找到 index.html 模板！")
 
-    df = process_data(df)
-    fig = generate_visuals(df)
-    fig.write_html(OUTPUT_
+    # 3. 抓取与生成数据
+    df = fetch_commit_data(REPO_URL)
+    if df is not None and not df.empty:
+        json_data = process_to_json(df)
+        
+        with open(JSON_FILE, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, ensure_ascii=False)
+            
+        print(f"🎉 成功生成数据文件: {JSON_FILE}")
+    else:
+        print("❌ 未获取到数据")
+
+if __name__ == "__main__":
+    main()
+    print("✅ 脚本运行结束")
