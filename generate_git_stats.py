@@ -11,6 +11,8 @@ REPO_URL = "https://github.com/mdlldz/java.git"
 OUTPUT_DIR = "public"
 JSON_FILE = os.path.join(OUTPUT_DIR, "data.json")
 TEMPLATE_FILE = "index.html"
+STYLE_FILE = os.path.join("public", "style.css") # 确保样式也被复制
+SCRIPT_FILE = os.path.join("public", "script.js") # 确保脚本也被复制
 # =======================================
 
 def fetch_commit_data(repo_url):
@@ -19,19 +21,29 @@ def fetch_commit_data(repo_url):
     try:
         repo = git.Repo.clone_from(repo_url, temp_dir)
         commits_list = []
-        # 只获取最近的 5000 条提交，防止数据量过大
-        for commit in repo.iter_commits(max_count=5000):
+        
+        # 获取最近的 2000 条提交 (获取 stats 比较耗时，稍微减少数量以防超时)
+        print("📊 正在分析提交数据 (这可能需要几分钟)...")
+        for commit in repo.iter_commits(max_count=2000):
+            try:
+                # 获取代码行数变动 (lines = insertions + deletions)
+                stats = commit.stats.total
+                lines_changed = stats.get('lines', 0)
+            except:
+                lines_changed = 0
+
             commits_list.append({
-                'hash': commit.hexsha[:7],  # 短哈希
+                'hash': commit.hexsha[:7],
                 'date': datetime.fromtimestamp(commit.committed_date),
                 'message': commit.message.strip(),
-                'timestamp': commit.committed_date
+                'timestamp': commit.committed_date,
+                'lines': lines_changed  # [新增] 记录行数
             })
         return pd.DataFrame(commits_list)
     finally:
         try:
             repo.close()
-            shutil.rmtree(temp_dir)  # 清理临时目录
+            shutil.rmtree(temp_dir)
         except Exception as e:
             print(f"清理临时文件时出错: {e}")
 
@@ -39,12 +51,11 @@ def calculate_streak(dates):
     """计算当前连续提交天数"""
     if not dates:
         return 0
-    # 去重并按日期倒序排列（最新的在前）
     dates = sorted(list(set(dates)), reverse=True)
     current_streak = 0
     today = datetime.now().date()
     
-    # 如果最新的提交距离今天超过1天，说明连续提交已中断
+    # 允许昨天没提交但 Streak 不断（视逻辑而定，这里保持严格模式：今天或昨天必须有）
     if dates[0] < today - timedelta(days=1):
         return 0
         
@@ -58,65 +69,84 @@ def calculate_streak(dates):
 
 def process_to_json(df):
     df['date_dt'] = pd.to_datetime(df['date'])
-    df['day_str'] = df['date_dt'].dt.date  # 提取日期（不含时间）
-    df['hour'] = df['date_dt'].dt.hour     # 提取小时
-    df['weekday'] = df['date_dt'].dt.weekday  # 提取星期（0=周一，6=周日）
+    df['day_str'] = df['date_dt'].dt.date
+    df['hour'] = df['date_dt'].dt.hour
+    df['weekday'] = df['date_dt'].dt.weekday
     
     # 1. 基础统计信息
     total_commits = len(df)
+    total_lines = int(df['lines'].sum()) # [新增] 计算总行数
     last_update = df['date_dt'].max().strftime("%Y-%m-%d %H:%M")
     unique_days = df['day_str'].unique().tolist()
     current_streak = calculate_streak(unique_days)
     
-    # 2. 提交趋势图数据（按天统计）
+    # 2. 提交趋势图数据
     daily_counts = df.groupby('day_str').size().reset_index(name='count')
     daily_counts = daily_counts.sort_values('day_str')
     
-    # 3. 活跃时间分布（用于热力图：星期 x 小时）
+    # 3. 活跃时间分布
     heatmap_data = []
     grouped = df.groupby(['weekday', 'hour']).size().reset_index(name='count')
     for _, row in grouped.iterrows():
-        # ECharts 热力图格式：[小时, 星期, 提交次数]
         heatmap_data.append([int(row['hour']), int(row['weekday']), int(row['count'])])
 
-    # 4. 最近提交记录（取前10条）
-    recent_commits = df.head(10)[['hash', 'message', 'date']].astype(str).to_dict(orient='records')
+    # 4. 最近提交记录 (包含 lines)
+    recent_commits = df.head(10)[['hash', 'message', 'date', 'lines']].copy()
+    # 将日期转换为字符串以便 JSON 序列化
+    recent_commits['date'] = recent_commits['date'].astype(str)
+    recent_records = recent_commits.to_dict(orient='records')
 
-    # 整理最终JSON数据
     data = {
         "meta": {
-            "repo": REPO_URL.split('/')[-1],
+            "repo": REPO_URL.split('/')[-1].replace('.git', ''),
             "updated": last_update,
             "total": total_commits,
-            "streak": current_streak
+            "streak": current_streak,
+            "total_lines": total_lines # [新增] 输出总行数
         },
         "trend": {
             "dates": daily_counts['day_str'].astype(str).tolist(),
             "values": daily_counts['count'].tolist()
         },
         "heatmap": heatmap_data,
-        "recent": recent_commits
+        "recent": recent_records
     }
     return data
 
 def main():
-    # 创建输出目录（如果不存在）
+    # 1. 准备输出目录
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
     
-    # 复制模板文件到输出目录
-    if os.path.exists(TEMPLATE_FILE):
-        shutil.copy(TEMPLATE_FILE, os.path.join(OUTPUT_DIR, "index.html"))
+    # 2. 复制静态资源 (HTML, CSS, JS) 到 public 目录
+    # 注意：GitHub Actions 运行在仓库根目录，所以源文件路径要注意
+    resources = [
+        (TEMPLATE_FILE, "index.html"),
+        ("public/style.css", "style.css"), # 假设 style.css 在 public 下或根目录，请根据实际情况调整
+        ("public/script.js", "script.js")
+    ]
     
-    # 获取提交数据并生成JSON
+    for src, dst_name in resources:
+        # 兼容源文件可能在根目录的情况
+        if not os.path.exists(src):
+            # 尝试在根目录找
+            src = os.path.basename(src) 
+            
+        if os.path.exists(src):
+            shutil.copy(src, os.path.join(OUTPUT_DIR, dst_name))
+            print(f"✅ 已复制资源: {src} -> {dst_name}")
+        else:
+            print(f"⚠️ 警告: 找不到资源文件 {src}")
+
+    # 3. 获取数据并生成 JSON
     df = fetch_commit_data(REPO_URL)
     if df is not None and not df.empty:
         json_data = process_to_json(df)
         with open(JSON_FILE, 'w', encoding='utf-8') as f:
             json.dump(json_data, f, ensure_ascii=False)
-        print(f"🎉 数据已生成: {JSON_FILE}")
+        print(f"🎉 数据生成成功: {JSON_FILE}")
     else:
-        print("❌ 未获取到提交数据")
+        print("❌ 未能获取数据")
 
 if __name__ == "__main__":
     main()
