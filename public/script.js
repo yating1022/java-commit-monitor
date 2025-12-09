@@ -17,27 +17,68 @@ function hideLoading(elementId) {
     }
 }
 
-// 格式化日期显示（增强容错）
+// 格式化日期显示（增强容错，并指定东八区时区进行日期判断）
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
     try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return dateString;
+        // 1. 核心：创建 Date 对象。
+        // 要求 Python 后端必须输出包含时区信息（如 +0800）的字符串，如："2025-12-08 20:10 +0800"
+        const commitDate = new Date(dateString);
+        if (isNaN(commitDate.getTime())) return dateString;
 
-        const now = new Date();
-        const diffTime = Math.abs(now - date);
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const SHANGHAI_TZ = 'Asia/Shanghai';
         
+        // 2. 获取东八区的今天日期（基准时间）
+        // 创建一个表示东八区午夜的 Date 对象，用于准确计算日期间隔。
+        const now = new Date();
+        const todayShanghaiString = now.toLocaleDateString('zh-CN', {
+            timeZone: SHANGHAI_TZ,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        });
+        // 转化为 Date 对象，表示东八区的午夜（0点）
+        const todayShanghai = new Date(todayShanghaiString);
+
+        // 3. 将提交日期也归一化为东八区的午夜（用于日期比较）
+        const commitDateShanghaiString = commitDate.toLocaleDateString('zh-CN', {
+            timeZone: SHANGHAI_TZ,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        });
+        const commitDateShanghai = new Date(commitDateShanghaiString);
+
+        // 4. 计算日期差（基于东八区午夜的时间戳）
+        const diffTime = todayShanghai.getTime() - commitDateShanghai.getTime();
+        // Math.round 用于处理夏令时边界或浏览器精度问题，确保得到整数天数。
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)); 
+        
+        // 5. 格式化时间部分
+        const timePart = commitDate.toLocaleTimeString('zh-CN', { 
+            timeZone: SHANGHAI_TZ, 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: false // 使用 24 小时制
+        });
+
         if (diffDays === 0) {
-            return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            return `今天 ${timePart}`;
         } else if (diffDays === 1) {
-            return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-        } else if (diffDays < 7) {
+            return `昨天 ${timePart}`;
+        } else if (diffDays > 1 && diffDays < 7) {
             return `${diffDays}天前`;
         } else {
-            return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+            // 完整日期部分
+            return commitDate.toLocaleDateString('zh-CN', {
+                timeZone: SHANGHAI_TZ,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).replace(/\//g, '-'); // 将斜杠替换为横杠
         }
     } catch (e) {
+        console.error("FormatDate Error:", e);
         return dateString;
     }
 }
@@ -92,7 +133,7 @@ function initDashboard(data) {
         }
     }
 
-    // === 3. ECharts 图表渲染 ===
+    // === 3. ECharts 图表渲染 (代码保持不变) ===
     const commonOption = {
         textStyle: { fontFamily: 'Inter, sans-serif' },
         tooltip: { 
