@@ -107,7 +107,7 @@ def calculate_streak(dates):
     return current_streak
 
 def process_to_json(df):
-    """数据处理与结构化，直接在现有列上进行东八区时区转换。"""
+    """数据处理与结构化，直接在现有列上进行东八区时区转换，并确保输出包含 UTC 偏移量 (+0800)。"""
     
     # 1. 时区转换
     # 'date' 列是 naive datetime，首先假设它是 UTC 时间进行本地化
@@ -124,8 +124,9 @@ def process_to_json(df):
     # 3. 计算元数据
     total_commits = len(df)
     total_lines = int(df['lines'].sum())
-    # last_update 使用东八区时间格式化，显示最新的提交时间
-    last_update = df['date'].max().strftime("%Y-%m-%d %H:%M") 
+    
+    # 【修改点 A】last_update: 使用 %z 确保输出 +0800
+    last_update = df['date'].max().strftime("%Y-%m-%d %H:%M %z") 
     
     unique_days = df['day_str'].unique().tolist()
     current_streak = calculate_streak(unique_days)
@@ -141,10 +142,10 @@ def process_to_json(df):
         heatmap_data.append([int(row['hour']), int(row['weekday']), int(row['count'])])
 
     # 6. 最近提交 (Recent)
-    # 确保 'date' 已经被转换为东八区时间
     recent_commits = df.head(10)[['hash', 'message', 'date', 'lines']].copy()
-    # 使用东八区时间进行格式化
-    recent_commits['date'] = recent_commits['date'].dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+    
+    # 【修改点 B】recent_commits['date']: 使用 %z 确保输出 +0800
+    recent_commits['date'] = recent_commits['date'].dt.strftime("%Y-%m-%d %H:%M:%S %z")
     recent_records = recent_commits.to_dict(orient='records')
     
     data = {
