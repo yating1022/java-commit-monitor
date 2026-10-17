@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>学习进度监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1 id="repo-name">加载中...</h1>
+        <div class="status-badge"><div class="status-dot"></div>数据已更新</div>
+    </header>
+
+    <div class="grid">
+        <div class="card stat-card">
+            <i class="fa-solid fa-code-commit stat-icon"></i>
+            <div class="stat-value" id="total-commits">-</div>
+            <div class="stat-label">总学习次数</div>
+        </div>
+        <div class="card stat-card">
+            <i class="fa-solid fa-fire stat-icon"></i>
+            <div class="stat-value" id="current-streak">-</div>
+            <div class="stat-label">当前连续学习(天)</div>
+        </div>
+        <div class="card stat-card">
+            <i class="fa-solid fa-clock stat-icon"></i>
+            <div class="stat-value" id="last-study-time" style="font-size: 1.2rem; line-height: 1.8rem;">-</div>
+            <div class="stat-label">上次学习时间</div>
+        </div>
+        <div class="card stat-card">
+            <i class="fa-solid fa-file-code stat-icon"></i>
+            <div class="stat-value" id="total-lines">-</div>
+            <div class="stat-label">累计代码行数</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card full-width">
+            <div class="chart-title"><i class="fa-solid fa-chart-line"></i> 学习频率趋势</div>
+            <div id="trendChart" class="chart-container">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card full-width">
+            <div class="chart-title"><i class="fa-solid fa-calendar-alt"></i> 学习时段分布</div>
+            <div id="heatmapChart" class="chart-container" style="height: 220px;">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card full-width">
+            <div class="chart-title"><i class="fa-solid fa-list-ul"></i> 最近学习内容</div>
+            <ul class="commit-list" id="commit-list">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
